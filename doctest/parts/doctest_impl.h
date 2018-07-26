@@ -1607,9 +1607,12 @@ namespace detail
         return m_failed && isDebuggerActive() && !contextState->no_breaks; // break into debugger
     }
 
-    void ResultBuilder::react() const {
-        if(m_failed && checkIfShouldThrow(m_assert_type))
+    bool ResultBuilder::react() const {
+        if(m_failed && checkIfShouldThrow(m_assert_type)) {
             throwException();
+            return true;
+        }
+        return false;
     }
 
     MessageBuilder::MessageBuilder(const char* file, int line, assertType::Enum severity)

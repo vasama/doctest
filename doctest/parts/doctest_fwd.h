@@ -421,6 +421,15 @@ DOCTEST_CLANG_SUPPRESS_WARNING("-Wc++98-compat-pedantic")
 #endif // DOCTEST_CONFIG_NO_EXCEPTIONS
 #endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
 
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#error DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE with DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#ifndef DOCTEST_COMFIG_NO_EXCEPTIONS
+#define DOCTEST_COMFIG_NO_EXCEPTIONS
+#endif // DOCTEST_COMFIG_NO_EXCEPTIONS
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+
 #if defined(DOCTEST_CONFIG_NO_EXCEPTIONS) && !defined(DOCTEST_CONFIG_NO_TRY_CATCH_IN_ASSERTS)
 #define DOCTEST_CONFIG_NO_TRY_CATCH_IN_ASSERTS
 #endif // DOCTEST_CONFIG_NO_EXCEPTIONS && !DOCTEST_CONFIG_NO_TRY_CATCH_IN_ASSERTS
@@ -1620,7 +1629,7 @@ namespace detail
         void unexpectedExceptionOccurred();
 
         bool log();
-        void react() const;
+        bool react() const;
     };
 
     namespace assertAction
@@ -2099,34 +2108,56 @@ public:
             decorators);                                                                           \
     DOCTEST_GLOBAL_NO_WARNINGS_END()
 
-#define DOCTEST_IMPLEMENT_FIXTURE(der, base, func, decorators)                                     \
-    namespace                                                                                      \
-    {                                                                                              \
-        struct der : base                                                                          \
-        {                                                                                          \
-            void f();                                                                              \
-        };                                                                                         \
-        static void func() {                                                                       \
-            der v;                                                                                 \
-            v.f();                                                                                 \
-        }                                                                                          \
-        DOCTEST_REGISTER_FUNCTION(func, decorators)                                                \
-    }                                                                                              \
-    inline DOCTEST_NOINLINE void der::f()
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_DEFINE_TEST_CASE_TAG(x) enum { DOCTEST_TEST_CASE_TAG = (x) };
+#else // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_DEFINE_TEST_CASE_TAG(x)
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
 
 #define DOCTEST_CREATE_AND_REGISTER_FUNCTION(f, decorators)                                        \
     static void f();                                                                               \
     DOCTEST_REGISTER_FUNCTION(f, decorators)                                                       \
     static void f()
 
+#define DOCTEST_CREATE_AND_REGISTER_SCOPED_FUNCTION(type, spec, func, decorators)                  \
+    namespace                                                                                      \
+    {                                                                                              \
+        struct type spec                                                                           \
+        {                                                                                          \
+            DOCTEST_DEFINE_TEST_CASE_TAG(1)                                                        \
+            void f();                                                                              \
+        };                                                                                         \
+        static void func() {                                                                       \
+            type v;                                                                                \
+            v.f();                                                                                 \
+        }                                                                                          \
+        DOCTEST_REGISTER_FUNCTION(func, decorators)                                                \
+    }                                                                                              \
+    inline DOCTEST_NOINLINE void type::f()
+
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_IMPLEMENT_CASE(f, decorators)                                                      \
+    DOCTEST_CREATE_AND_REGISTER_SCOPED_FUNCTION(DOCTEST_ANONYMOUS(_DOCTEST_ANON_CLASS_), , f,      \
+                                                decorators)
+#else // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_IMPLEMENT_CASE(f, decorators)                                                      \
+    DOCTEST_CREATE_AND_REGISTER_FUNCTION(f, decorators)
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+
+#define DOCTEST_IMPLEMENT_FIXTURE(der, base, func, decorators)                                     \
+    DOCTEST_CREATE_AND_REGISTER_SCOPED_FUNCTION(der, : base, func, decorators)
+
 // for registering tests
 #define DOCTEST_TEST_CASE(decorators)                                                              \
-    DOCTEST_CREATE_AND_REGISTER_FUNCTION(DOCTEST_ANONYMOUS(_DOCTEST_ANON_FUNC_), decorators)
+    DOCTEST_IMPLEMENT_CASE(DOCTEST_ANONYMOUS(_DOCTEST_ANON_FUNC_), decorators)
 
 // for registering tests with a fixture
 #define DOCTEST_TEST_CASE_FIXTURE(c, decorators)                                                   \
     DOCTEST_IMPLEMENT_FIXTURE(DOCTEST_ANONYMOUS(_DOCTEST_ANON_CLASS_), c,                          \
                               DOCTEST_ANONYMOUS(_DOCTEST_ANON_FUNC_), decorators)
+
+// test case tag default value
+DOCTEST_DEFINE_TEST_CASE_TAG(0)
 
 // for converting types to strings without the <typeinfo> header and demangling
 #ifdef DOCTEST_CONFIG_WITH_VARIADIC_MACROS
@@ -2332,11 +2363,17 @@ constexpr T to_lvalue = x;
 #endif // DOCTEST_CONFIG_WITH_VARIADIC_MACROS
 #endif // TO_LVALUE hack for logging macros like INFO()
 
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_ASSERT_RETURN()
+#else // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+#define DOCTEST_ASSERT_RETURN()
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS_IN_TEST_CASE
+
 // common code in asserts - for convenience
 #define DOCTEST_ASSERT_LOG_AND_REACT(rb)                                                           \
     if(rb.log())                                                                                   \
         DOCTEST_BREAK_INTO_DEBUGGER();                                                             \
-    rb.react()
+    if(rb.react()) { DOCTEST_ASSERT_RETURN() }
 
 #ifdef DOCTEST_CONFIG_NO_TRY_CATCH_IN_ASSERTS
 #define DOCTEST_WRAP_IN_TRY(x) x;
